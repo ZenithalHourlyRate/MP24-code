@@ -63,6 +63,36 @@ def variance_mod_switch(n, t, q, p, input_variance):
     output_variance += gamma_squared_input_variance
     return output_variance
 
+#####################################################################
+# HElib implementation specific noise analysis #
+#####################################################################
+
+def variance_fresh(n, t):
+    return 0
+
+def variance_add(input_variance_1, input_variance_2):
+    return input_variance_1 + input_variance_2
+
+def helib_variance_premult(n, t):
+    term1 = t * t * t * t * (1.0/36) * (1 + n/2) * (1 + n/2) * (n/2) 
+    return term1
+
+def helib_variance_key_switch(n, t, Q, Qi, digits, premult_variance):
+    std0 = 3.2
+    variance0 = std0 * std0
+    gamma_squared_input_variance = (float(Q)/Qi) * (float(Q)/Qi) * premult_variance
+    term2_pre = variance0 * t * t * n / 12
+    term2_post = 1.0
+    for digit in digits:
+        print("digit:", log(digit, 2))
+        term2_post += digit * 2
+    print(log(sqrt(gamma_squared_input_variance), 2))
+    print(log(sqrt(term2_pre * term2_post), 2))
+    return gamma_squared_input_variance #+ term2_pre * term2_post
+
+def helib_variance_mod_switch(n, t):
+    output_variance = (1.0/12) * ((1.0/2) * n + 1) * (t * t)
+    return output_variance
 
 ###############################################################
 # Calculate noise budget remaining after evaluating a circuit #
@@ -74,11 +104,42 @@ def alpha_bound_from_variance(variance, n):
     bound = sqrt(2*variance) * erfinv(pow(1-alpha,1.0/n))
     return bound
 
+def get_noise(variance, n):
+    return log(alpha_bound_from_variance(variance, n), 2)
+
 # Given bound on the noise in the output ciphertext, calculate the noise budget remaining
 def get_noise_budget(bound, q):
     output = floor(log(q,2)-log(bound,2)) - 1
     return output
 
+
+###########################################################################
+# CUSTOM
+###########################################################################
+
+primeSet = [125627793409,128312147969,8658654068737,62672162783233,505775348776961,4222124650659841,31525197391593473,34832528367943681,32404806693814273,32035370786881537,32211292647325697,32563136368214017,34040879995944961,34146433112211457,2128654511374337,2190227162529793]
+
+def pps(indexSet):
+    prod = 1
+    for i in indexSet:
+        prod *= primeSet[i]
+    return prod
+
+def main():
+    n = 8192
+    t = 3
+    variance_modswitch1 = helib_variance_mod_switch(n, t)
+    variance_premult2 = helib_variance_premult(n, t)
+    variance_relin2 = helib_variance_key_switch(n, t, pps([6,7,8,9,10,11,12,14,15]), pps([6,7,8,9,10,11,12]), [pps([6,7]), pps([8,9]), pps([10,11]), pps([12])], variance_premult2)
+    bound_modswitch1 = get_noise(variance_modswitch1, n)
+    bound_premult2 = get_noise(variance_premult2, n)
+    bound_relin2 = get_noise(variance_relin2, n)
+    print()
+    print(bound_modswitch1)
+    print(bound_premult2)
+    print(bound_relin2)
+
+main()
 
 ###########################################################################
 # Estimates of worst-case and average-case heuristics for [CLP20] circuit #
@@ -213,85 +274,85 @@ p_32768_SEAL = 2**770
 ###########################
 
 # Table 1: HElib, [CLP20] circuit, worst-case
-print("HElib, [CLP20] circuit, worst-case (Table 1, column [CLP20]):")
-print("n: " + str(n_2048))
-print(worst_case_clp20(n_2048, t_helib, q_2048_helib, p_2048_helib))
-print("n: " + str(n_4096))
-print(worst_case_clp20(n_4096, t_helib, q_4096_helib, p_4096_helib))
-print("n: " + str(n_8192))
-print(worst_case_clp20(n_8192, t_helib, q_8192_helib, p_8192_helib))
-print("n: " + str(n_16384))
-print(worst_case_clp20(n_16384, t_helib, q_16384_helib, p_16384_helib))
-print("\n")
-
-# Table 1: HElib, [CLP20] circuit, average-case
-print("HElib, [CLP20] circuit, average-case (Table 1, column Ours):")
-print("n: " + str(n_2048))
-print(average_case_clp20(n_2048, t_helib, q_2048_helib, p_2048_helib))
-print("n: " + str(n_4096))
-print(average_case_clp20(n_4096, t_helib, q_4096_helib, p_4096_helib))
-print("n: " + str(n_8192))
-print(average_case_clp20(n_8192, t_helib, q_8192_helib, p_8192_helib))
-print("n: " + str(n_16384))
-print(average_case_clp20(n_16384, t_helib, q_16384_helib, p_16384_helib))
-print("\n")
-
-# Table 2: HElib, "bgv deep" circuit, worst-case
-print("HElib, bgv deep circuit, worst-case (Table 2, column [CLP20]):")
-print("n: " + str(n_4096))
-print(worst_case_bgv_deep(n_4096, t_helib, q_4096_helib))
-print("n: " + str(n_8192))
-print(worst_case_bgv_deep(n_8192, t_helib, q_8192_helib))
-print("n: " + str(n_16384))
-print(worst_case_bgv_deep(n_16384, t_helib, q_16384_helib))
-print("\n")
-
-# Table 2: HElib, "bgv deep" circuit, average-case
-print("HElib, bgv deep circuit, average-case (Table 2, column Ours):")
-print("n: " + str(n_4096))
-print(average_case_bgv_deep(n_4096, t_helib, q_4096_helib, p_4096_helib))
-print("n: " + str(n_8192))
-print(average_case_bgv_deep(n_8192, t_helib, q_8192_helib, p_8192_helib))
-print("n: " + str(n_16384))
-print(average_case_bgv_deep(n_16384, t_helib, q_16384_helib, p_16384_helib))
-print("\n")
-
-# Table 3: SEAL, [CLP20] circuit, worst-case
-print("SEAL, [CLP20] circuit, worst-case (Table 3, column [CLP20]):")
-print("n: " + str(n_4096))
-print(worst_case_clp20(n_4096, t_4096_SEAL, q_4096_SEAL, p_4096_SEAL))
-print("n: " + str(n_8192))
-print(worst_case_clp20(n_8192, t_8192_SEAL, q_8192_SEAL, p_8192_SEAL))
-print("n: " + str(n_16384))
-print(worst_case_clp20(n_16384, t_16384_SEAL, q_16384_SEAL, p_16384_SEAL))
-print("n: " + str(n_32768))
-print(worst_case_clp20(n_32768, t_16384_SEAL, q_32768_SEAL, p_32768_SEAL))
-print("\n")
-
-# Table 3: SEAL, [CLP20] circuit, average-case
-print("SEAL, [CLP20] circuit, average-case (Table 3, column Ours):")
-print("n: " + str(n_4096))
-print(average_case_clp20(n_4096, t_4096_SEAL, q_4096_SEAL, p_4096_SEAL))
-print("n: " + str(n_8192))
-print(average_case_clp20(n_8192, t_8192_SEAL, q_8192_SEAL, p_8192_SEAL))
-print("n: " + str(n_16384))
-print(average_case_clp20(n_16384, t_16384_SEAL, q_16384_SEAL, p_16384_SEAL))
-print("n: " + str(n_32768))
-print(average_case_clp20(n_32768, t_32768_SEAL, q_32768_SEAL, p_32768_SEAL))
-print("\n")
-
-# Table 4: SEAL, "bgv deep" circuit, worst-case
-print("SEAL, bgv deep circuit, worst-case (Table 4, column [CLP20]):")
-print("n: " + str(n_16384))
-print(worst_case_bgv_deep(n_16384, t_16384_SEAL, q_16384_SEAL))
-print("n: " + str(n_32768))
-print(worst_case_bgv_deep(n_32768, t_32768_SEAL, q_32768_SEAL))
-print("\n")
-
-# Table 4: SEAL, "bgv deep" circuit, average-case
-print("SEAL, bgv deep circuit, average-case (Table 4, column Ours):")
-print("n: " + str(n_16384))
-print(average_case_bgv_deep(n_16384, t_16384_SEAL, q_16384_SEAL, p_16384_SEAL))
-print("n: " + str(n_32768))
-print(average_case_bgv_deep(n_32768, t_32768_SEAL, q_32768_SEAL, p_32768_SEAL))
-print("\n")
+#print("HElib, [CLP20] circuit, worst-case (Table 1, column [CLP20]):")
+#print("n: " + str(n_2048))
+#print(worst_case_clp20(n_2048, t_helib, q_2048_helib, p_2048_helib))
+#print("n: " + str(n_4096))
+#print(worst_case_clp20(n_4096, t_helib, q_4096_helib, p_4096_helib))
+#print("n: " + str(n_8192))
+#print(worst_case_clp20(n_8192, t_helib, q_8192_helib, p_8192_helib))
+#print("n: " + str(n_16384))
+#print(worst_case_clp20(n_16384, t_helib, q_16384_helib, p_16384_helib))
+#print("\n")
+#
+## Table 1: HElib, [CLP20] circuit, average-case
+#print("HElib, [CLP20] circuit, average-case (Table 1, column Ours):")
+#print("n: " + str(n_2048))
+#print(average_case_clp20(n_2048, t_helib, q_2048_helib, p_2048_helib))
+#print("n: " + str(n_4096))
+#print(average_case_clp20(n_4096, t_helib, q_4096_helib, p_4096_helib))
+#print("n: " + str(n_8192))
+#print(average_case_clp20(n_8192, t_helib, q_8192_helib, p_8192_helib))
+#print("n: " + str(n_16384))
+#print(average_case_clp20(n_16384, t_helib, q_16384_helib, p_16384_helib))
+#print("\n")
+#
+## Table 2: HElib, "bgv deep" circuit, worst-case
+#print("HElib, bgv deep circuit, worst-case (Table 2, column [CLP20]):")
+#print("n: " + str(n_4096))
+#print(worst_case_bgv_deep(n_4096, t_helib, q_4096_helib))
+#print("n: " + str(n_8192))
+#print(worst_case_bgv_deep(n_8192, t_helib, q_8192_helib))
+#print("n: " + str(n_16384))
+#print(worst_case_bgv_deep(n_16384, t_helib, q_16384_helib))
+#print("\n")
+#
+## Table 2: HElib, "bgv deep" circuit, average-case
+#print("HElib, bgv deep circuit, average-case (Table 2, column Ours):")
+#print("n: " + str(n_4096))
+#print(average_case_bgv_deep(n_4096, t_helib, q_4096_helib, p_4096_helib))
+#print("n: " + str(n_8192))
+#print(average_case_bgv_deep(n_8192, t_helib, q_8192_helib, p_8192_helib))
+#print("n: " + str(n_16384))
+#print(average_case_bgv_deep(n_16384, t_helib, q_16384_helib, p_16384_helib))
+#print("\n")
+#
+## Table 3: SEAL, [CLP20] circuit, worst-case
+#print("SEAL, [CLP20] circuit, worst-case (Table 3, column [CLP20]):")
+#print("n: " + str(n_4096))
+#print(worst_case_clp20(n_4096, t_4096_SEAL, q_4096_SEAL, p_4096_SEAL))
+#print("n: " + str(n_8192))
+#print(worst_case_clp20(n_8192, t_8192_SEAL, q_8192_SEAL, p_8192_SEAL))
+#print("n: " + str(n_16384))
+#print(worst_case_clp20(n_16384, t_16384_SEAL, q_16384_SEAL, p_16384_SEAL))
+#print("n: " + str(n_32768))
+#print(worst_case_clp20(n_32768, t_16384_SEAL, q_32768_SEAL, p_32768_SEAL))
+#print("\n")
+#
+## Table 3: SEAL, [CLP20] circuit, average-case
+#print("SEAL, [CLP20] circuit, average-case (Table 3, column Ours):")
+#print("n: " + str(n_4096))
+#print(average_case_clp20(n_4096, t_4096_SEAL, q_4096_SEAL, p_4096_SEAL))
+#print("n: " + str(n_8192))
+#print(average_case_clp20(n_8192, t_8192_SEAL, q_8192_SEAL, p_8192_SEAL))
+#print("n: " + str(n_16384))
+#print(average_case_clp20(n_16384, t_16384_SEAL, q_16384_SEAL, p_16384_SEAL))
+#print("n: " + str(n_32768))
+#print(average_case_clp20(n_32768, t_32768_SEAL, q_32768_SEAL, p_32768_SEAL))
+#print("\n")
+#
+## Table 4: SEAL, "bgv deep" circuit, worst-case
+#print("SEAL, bgv deep circuit, worst-case (Table 4, column [CLP20]):")
+#print("n: " + str(n_16384))
+#print(worst_case_bgv_deep(n_16384, t_16384_SEAL, q_16384_SEAL))
+#print("n: " + str(n_32768))
+#print(worst_case_bgv_deep(n_32768, t_32768_SEAL, q_32768_SEAL))
+#print("\n")
+#
+## Table 4: SEAL, "bgv deep" circuit, average-case
+#print("SEAL, bgv deep circuit, average-case (Table 4, column Ours):")
+#print("n: " + str(n_16384))
+#print(average_case_bgv_deep(n_16384, t_16384_SEAL, q_16384_SEAL, p_16384_SEAL))
+#print("n: " + str(n_32768))
+#print(average_case_bgv_deep(n_32768, t_32768_SEAL, q_32768_SEAL, p_32768_SEAL))
+#print("\n")

@@ -107,7 +107,7 @@ NTL::xdouble get_helib_estimated_noise(helib::Ctxt encrypted)
 int main()
 {
 
-    test_noise(100);
+    test_noise(1);
     return 0;
     while (true)
     {
@@ -187,7 +187,7 @@ void test_noise(int trials)
 
     /* Set other parameters to HElib defaults */
     unsigned long r = 1;    // Hensel lifting, default is 1
-    unsigned long c = 2;    // columns in key switching matrix, default is 2 or 3
+    unsigned long c = 4;    // columns in key switching matrix, default is 2 or 3
     unsigned long k = 80;   // security parameter, default is 80 (may not correspond to true bit security)
     
     /* Check that choice of m is ok */
@@ -267,6 +267,8 @@ void test_noise(int trials)
         long value2 = i;      
         plain1[0] = value1;
         plain2[0] = value2;
+        plain1[1] = 1;
+        plain2[1] = 1;
 
         /* Encrypt the plaintexts into ciphertexts */
         public_key.Encrypt(encrypted1, plain1);
@@ -300,25 +302,35 @@ void test_noise(int trials)
   auto type##_helib_est = get_helib_estimated_noise(C); \
   total_##type##_helib_est += type##_helib_est; \
   array_##type##_helib_est.push_back(total_##type##_helib_est); \
-        
+
+#define DECRYPT(type, C) \
+        helib::Ptxt<helib::BGV> plain_##type(context); \
+        secret_key.Decrypt(plain_##type, C); \
+        cout << "prime set: " << C.getPrimeSet() << endl; \
+        //std::cout << #type " dec: " << plain_##type << std::endl; \
+       
         ACC_NOISE(fresh, encrypted1);
+        DECRYPT(fresh, encrypted1);
 
         /* Compute the homomorphic addition of encrypted1 and encrypted2. Done in place, adding encrypted2 into encrypted1 */
         encrypted1 += encrypted2;
 
         ACC_NOISE(add, encrypted1);
+        DECRYPT(add, encrypted1);
 
         /* Compute the homomorphic multiplication of encrypted1 and encrypted2 and store the output in encrypted3 */
-        encrypted3.tensorProduct(encrypted1, encrypted2);
+        encrypted3.tensorProduct(encrypted1, encrypted1);
 
         //std::cout << encrypted3 << std::endl;
 
         ACC_NOISE(mult, encrypted3);
+        DECRYPT(mult, encrypted3);
 
         encrypted3.reLinearize();
 
         //std::cout << encrypted4 << std::endl;
         ACC_NOISE(relin, encrypted3);
+        DECRYPT(relin, encrypted3);
 
         /* What is the observed noise growth after multiplication? */
         /* Modulus switch encrypted3 down to next modulus in chain */
@@ -358,22 +370,29 @@ void test_noise(int trials)
         }
 
         ACC_NOISE(modswitch, encrypted3);
+        DECRYPT(modswitch, encrypted3);
 
         encrypted4.tensorProduct(encrypted3, encrypted3);
         ACC_NOISE(mult2, encrypted4);
+        DECRYPT(mult2, encrypted4);
         encrypted4.reLinearize();
         ACC_NOISE(relin2, encrypted4);
+        DECRYPT(relin2, encrypted4);
         helib::IndexSet natural_primes2 = encrypted4.naturalPrimeSet();
         encrypted4.modDownToSet(natural_primes2);
         ACC_NOISE(modswitch2, encrypted4);
+        DECRYPT(modswitch2, encrypted4);
 
         encrypted5.tensorProduct(encrypted4, encrypted4);
         ACC_NOISE(mult3, encrypted5);
+        DECRYPT(mult3, encrypted5);
         encrypted5.reLinearize();
         ACC_NOISE(relin3, encrypted5);
+        DECRYPT(relin3, encrypted5);
         helib::IndexSet natural_primes3 = encrypted5.naturalPrimeSet();
         encrypted5.modDownToSet(natural_primes3);
         ACC_NOISE(modswitch3, encrypted5);
+        DECRYPT(modswitch3, encrypted5);
 
     }
 
@@ -395,8 +414,8 @@ void test_noise(int trials)
 
 #define COUT_NOISE(type) \
     cout << "After " #type << endl; \
-    cout << "Mean noise budget observed: " << mean_##type##_observed  << endl; \
-    cout << "Mean HElib estimated noise budget: " << mean_##type##_helib_est << endl; \
+    cout << "Mean noise observed: " << mean_##type##_observed  << endl; \
+    cout << "Mean HElib estimated noise: " << mean_##type##_helib_est << endl; \
     cout << endl; \
 
     COUT_NOISE(fresh);
